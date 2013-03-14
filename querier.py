@@ -36,9 +36,19 @@ class QueryExecutor:
 	"""Query Executor based on the input file"""
 
 	parser = ""
+	yamlInput = ""
 
 	def __init__(self, parser):
 		self.parser = parser
+
+
+	def loadYaml(self):
+		f = file(self.parser.input())
+		self.yamlInput = yaml.load(f)
+		f.close
+
+	def printYaml(self):
+		print yaml.dump(self.yamlInput)
 
 def main():
 	parser = Parser()
@@ -47,6 +57,8 @@ def main():
 		parser.printMe()
 
 	queryExecutor = QueryExecutor(parser)
+	queryExecutor.loadYaml()
+	queryExecutor.printYaml()
 
 if __name__ == "__main__":
 	main()

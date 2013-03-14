@@ -1,4 +1,0 @@
---- !yaml
-queries:
-	- {query: SELECT * FROM users}
-	- {query: SELECT * FROM payments}
