@@ -5,5 +5,5 @@ treeroot:
         query: SELECT * FROM users;
     query2:
         name: second
-        query: SELECT * FROM payments;
+        query: SELECT * FROM departments;
 

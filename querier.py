@@ -3,7 +3,7 @@
 
 from optparse import OptionParser
 import yaml
-
+import psycopg2
 
 class Parser:
 	"""Commandline parser"""
@@ -32,6 +32,30 @@ class Parser:
 	def printMe(self):
 		print(self.options)
 		print(self.args)
+
+class DatabaseAdapter:
+	"""Database adapter"""
+
+	conn = ""
+	cursor = ""
+	resultset = ""
+
+
+	def connect(self):
+		self.conn = psycopg2.connect("dbname=testdb user=taufekj password=password")
+
+	def execute(self, query):
+		self.cursor = self.conn.cursor()
+		self.cursor.execute(query)
+		self.resultset = self.cursor.fetchall()
+
+	def close(self):
+		self.cursor.close()
+		self.conn.close()
+
+	def getData(self):
+		return self.resultset
+
 
 class Command:
 	"""Command values"""
@@ -83,9 +107,15 @@ class InputParser:
 	def getCommands(self):
 		return self.commands
 		
-	def iterateCommands(self):
+	def executeCommands(self):
+
+		db = DatabaseAdapter()
 		for commandName in self.commands.keys():
-			print self.commands[commandName]
+			print self.commands[commandName].query
+			db.connect()
+			db.execute(self.commands[commandName].query)
+			print db.getData()
+			db.close()
 
 def main():
 	parser = Parser()
@@ -97,7 +127,7 @@ def main():
 	input.loadYaml()
 	input.printYaml()
 	input.parseConfig()
-	input.iterateCommands()
+	input.executeCommands()
 
 if __name__ == "__main__":
 	main()
