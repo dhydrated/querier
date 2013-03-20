@@ -4,6 +4,7 @@
 from optparse import OptionParser
 import yaml
 import psycopg2
+import csv
 
 class Parser:
 	"""Commandline parser"""
@@ -39,7 +40,7 @@ class DatabaseAdapter:
 	conn = ""
 	cursor = ""
 	resultset = ""
-
+	columns = ""
 
 	def connect(self):
 		self.conn = psycopg2.connect("dbname=testdb user=taufekj password=password")
@@ -47,6 +48,7 @@ class DatabaseAdapter:
 	def execute(self, query):
 		self.cursor = self.conn.cursor()
 		self.cursor.execute(query)
+		self.columns = [desc[0] for desc in self.cursor.description]
 		self.resultset = self.cursor.fetchall()
 
 	def close(self):
@@ -56,6 +58,8 @@ class DatabaseAdapter:
 	def getData(self):
 		return self.resultset
 
+	def getColumns(self):
+		return self.columns
 
 class Command:
 	"""Command values"""
@@ -69,7 +73,23 @@ class Command:
 	def __str__(self):
 		return self.name
 		
-		
+
+class OutputWriter:
+	"""Output writer"""
+
+	def __init__(self, name, columns, resultset):
+		self.name = name
+		self.columns = columns
+		self.resultset = resultset
+
+	def write(self):
+		pass	
+
+	def debug(self):
+		print self.name
+		print self.columns
+		print self.resultset
+
 class InputParser:
 	"""Parsing input file"""
 
@@ -111,11 +131,12 @@ class InputParser:
 
 		db = DatabaseAdapter()
 		for commandName in self.commands.keys():
-			print self.commands[commandName].query
 			db.connect()
 			db.execute(self.commands[commandName].query)
-			print db.getData()
+			writer = OutputWriter(commandName, db.getData(), db.getColumns())
 			db.close()
+
+			writer.debug()
 
 def main():
 	parser = Parser()
