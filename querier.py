@@ -152,8 +152,11 @@ class InputParser:
 		for commandName in self.commands.keys():
 			db.connect()
 			db.execute(self.commands[commandName].query)
-			writer = OutputWriter(commandName, db.getColumns(), db.getData(), self.arguments.output())
 			db.close()
+			self._writeDataToFile_(commandName, db.getColumns(), db.getData(), self.arguments.output())
+	
+	def _writeDataToFile_(self, commandName, columns, data, outputFolder):			
+			writer = OutputWriter(commandName, columns, data, outputFolder)
 			
 			if(self.arguments.verbose()):
 				writer.debug()
