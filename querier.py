@@ -55,8 +55,14 @@ class DatabaseAdapter:
 		self.conn = psycopg2.connect("dbname=testdb user=taufekj password=password")
 
 	def execute(self, query):
+		self._execute_(query)
+		self._setAttributes_()
+
+	def _execute_(self, query):
 		self.cursor = self.conn.cursor()
 		self.cursor.execute(query)
+
+	def _setAttributes_(self):
 		self.columns = [desc[0] for desc in self.cursor.description]
 		self.columns = [tuple(self.columns)]
 		self.resultset = self.cursor.fetchall()
@@ -148,7 +154,10 @@ class InputParser:
 			db.execute(self.commands[commandName].query)
 			writer = OutputWriter(commandName, db.getColumns(), db.getData(), self.parser.output())
 			db.close()
-			writer.debug()
+			
+			if(self.parser.verbose()):
+				writer.debug()
+			
 			writer.write()
 
 def main():
@@ -159,7 +168,10 @@ def main():
 
 	input = InputParser(parser)
 	input.loadYaml()
-	input.printYaml()
+	
+	if(parser.verbose()):
+		input.printYaml()
+	
 	input.parseConfig()
 	input.executeCommands()
 
