@@ -5,6 +5,7 @@ from optparse import OptionParser
 import yaml
 import psycopg2
 import csv
+import os
 
 class Parser:
 	"""Commandline parser"""
@@ -14,13 +15,18 @@ class Parser:
 
 	def __init__(self):
 		parser = OptionParser()
+
 		parser.add_option("-f", "--file", dest="filename",
                   help="write report to FILE", metavar="FILE")
+
 		parser.add_option("-v", "--verbose",
                   action="store_true", dest="verbose", default=False,
                   help="print out messages")
+
 		parser.add_option("-i", "--input", dest="input", default="query.yml",
                   help="input")
+
+		parser.add_option("-o", "--output", dest="output", default="output", help="output")
 
 		(self.options, self.args) = parser.parse_args()
 
@@ -29,6 +35,9 @@ class Parser:
 
 	def verbose(self):
 		return self.options.verbose
+
+	def output(self):
+		return self.options.output
 
 	def printMe(self):
 		print(self.options)
@@ -49,6 +58,7 @@ class DatabaseAdapter:
 		self.cursor = self.conn.cursor()
 		self.cursor.execute(query)
 		self.columns = [desc[0] for desc in self.cursor.description]
+		self.columns = [tuple(self.columns)]
 		self.resultset = self.cursor.fetchall()
 
 	def close(self):
@@ -77,14 +87,25 @@ class Command:
 class OutputWriter:
 	"""Output writer"""
 
-	def __init__(self, name, columns, resultset):
+	def __init__(self, name, columns, resultset, output):
 		self.name = name
 		self.columns = columns
 		self.resultset = resultset
+		self.output = output
 
 	def write(self):
-		pass	
+		
+		self.createDirIfNotExist()
 
+		with open(self.output+'/'+self.name+'.csv', 'wb') as f:
+			writer = csv.writer(f)
+			data = self.columns + self.resultset
+			writer.writerows(data)
+	
+	def createDirIfNotExist(self):
+		if not os.path.exists(self.output):
+			os.makedirs(self.output)
+	
 	def debug(self):
 		print self.name
 		print self.columns
@@ -112,31 +133,23 @@ class InputParser:
 	def parseConfig(self):
 		for rootKey in self.yamlInput.keys():
 			queryItem = self.yamlInput[rootKey]
-			#print queryItem
 			for queryKey in queryItem:
 				queryValues = queryItem[queryKey]
-				#print queryItem[queryKey]
-				#for queryObjectKey in queryValues:
-				#	print queryValues[queryObjectKey]
-				#print queryValues['name'];
-				#print queryValues['query'];
 				queryObject = Command(queryValues['name'], queryValues['query'])
-				#print queryObject.name
 				self.commands.update({queryObject.name:queryObject})
 				
 	def getCommands(self):
 		return self.commands
 		
 	def executeCommands(self):
-
 		db = DatabaseAdapter()
 		for commandName in self.commands.keys():
 			db.connect()
 			db.execute(self.commands[commandName].query)
-			writer = OutputWriter(commandName, db.getData(), db.getColumns())
+			writer = OutputWriter(commandName, db.getColumns(), db.getData(), self.parser.output())
 			db.close()
-
 			writer.debug()
+			writer.write()
 
 def main():
 	parser = Parser()
