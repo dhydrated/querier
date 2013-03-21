@@ -7,8 +7,8 @@ import psycopg2
 import csv
 import os
 
-class Parser:
-	"""Commandline parser"""
+class ArgumentParser:
+	"""Commandline arguments"""
 
 	options = ""
 	args = ""
@@ -120,15 +120,15 @@ class OutputWriter:
 class InputParser:
 	"""Parsing input file"""
 
-	parser = ""
+	arguments = ""
 	yamlInput = ""
 	commands = {}
 
-	def __init__(self, parser):
-		self.parser = parser
+	def __init__(self, arguments):
+		self.arguments = arguments
 
 	def loadYaml(self):
-		f = file(self.parser.input())
+		f = file(self.arguments.input())
 		self.yamlInput = yaml.load(f)
 		f.close
 
@@ -152,24 +152,24 @@ class InputParser:
 		for commandName in self.commands.keys():
 			db.connect()
 			db.execute(self.commands[commandName].query)
-			writer = OutputWriter(commandName, db.getColumns(), db.getData(), self.parser.output())
+			writer = OutputWriter(commandName, db.getColumns(), db.getData(), self.arguments.output())
 			db.close()
 			
-			if(self.parser.verbose()):
+			if(self.arguments.verbose()):
 				writer.debug()
 			
 			writer.write()
 
 def main():
-	parser = Parser()
+	arguments = ArgumentParser()
 	
-	if(parser.verbose()):
-		parser.printMe()
+	if(arguments.verbose()):
+		arguments.printMe()
 
-	input = InputParser(parser)
+	input = InputParser(arguments)
 	input.loadYaml()
 	
-	if(parser.verbose()):
+	if(arguments.verbose()):
 		input.printYaml()
 	
 	input.parseConfig()
