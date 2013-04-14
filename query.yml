@@ -1,5 +1,5 @@
 # tree format
-treeroot:
+group A:
     query1:
         name: first
         query: SELECT * FROM users;

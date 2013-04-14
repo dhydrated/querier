@@ -6,6 +6,8 @@ import yaml
 import psycopg2
 import csv
 import os
+import datetime
+import time
 
 class ArgumentParser:
 	"""Commandline arguments"""
@@ -13,7 +15,7 @@ class ArgumentParser:
 	options = ""
 	args = ""
 
-	def __init__(self):
+	def parse(self):
 		parser = OptionParser()
 
 		parser.add_option("-f", "--file", dest="filename",
@@ -30,18 +32,41 @@ class ArgumentParser:
 
 		(self.options, self.args) = parser.parse_args()
 
-	def input(self):
+	def isValid(self):
+		return True
+
+	def getInput(self):
 		return self.options.input
 
-	def verbose(self):
+	def isVerbose(self):
 		return self.options.verbose
 
-	def output(self):
+	def getOutput(self):
 		return self.options.output
+
+	def printUsage(self):
+		self.parser.print_help()
 
 	def printMe(self):
 		print(self.options)
 		print(self.args)
+
+class Logger:
+	"""Script logger"""
+
+	def __init__(self, arguments):
+		self.arguments = arguments
+		self.verbose = self.arguments.isVerbose()
+
+	def debug(self, msg):
+		if self.verbose :
+			self._print_(msg)
+
+	def info(self, msg):
+		self._print_(msg)
+			
+	def _print_(self,msg):
+		print str(datetime.datetime.today())+" : "+str(msg)
 
 class DatabaseAdapter:
 	"""Database adapter"""
@@ -50,6 +75,9 @@ class DatabaseAdapter:
 	cursor = ""
 	resultset = ""
 	columns = ""
+	
+	def __init__(self, logger):
+		self.logger = logger
 
 	def connect(self):
 		self.conn = psycopg2.connect("dbname=testdb user=taufekj password=password")
@@ -79,25 +107,41 @@ class DatabaseAdapter:
 
 class Command:
 	"""Command values"""
-	name = ""
-	query = ""
+	
+	name = None
+	query = None
+	timeTaken = None
 	
 	def __init__(self,name,query):
 		self.name = name
 		self.query = query
 		
 	def __str__(self):
-		return self.name
+		return self.name + ", " + self.query + ", " + str(self.timeTaken)
+	
+	def setTimeTaken(self, timeTaken):
+		self.timeTaken = timeTaken
 		
+	def getIterableData(self):
+		return [(self.name, self.query, self.timeTaken)]
+		
+class BaseWriter:
+	"""Base Writer"""
+	
+	def createDirIfNotExist(self):
+		if not os.path.exists(self.output):
+			os.makedirs(self.output)
+	
 
-class OutputWriter:
+class OutputWriter(BaseWriter):
 	"""Output writer"""
 
-	def __init__(self, name, columns, resultset, output):
+	def __init__(self, logger, name, columns, resultset, output):
 		self.name = name
 		self.columns = columns
 		self.resultset = resultset
 		self.output = output
+		self.logger = logger
 
 	def write(self):
 		
@@ -108,14 +152,26 @@ class OutputWriter:
 			data = self.columns + self.resultset
 			writer.writerows(data)
 	
-	def createDirIfNotExist(self):
-		if not os.path.exists(self.output):
-			os.makedirs(self.output)
-	
 	def debug(self):
-		print self.name
-		print self.columns
-		print self.resultset
+		self.logger.debug(self.name)
+		self.logger.debug(self.columns)
+		self.logger.debug(self.resultset)
+		
+class SummaryWriter(BaseWriter):
+	"""Summary Writer"""
+	
+	def __init__(self, logger, commands, output):
+		self.logger = logger
+		self.commands = commands
+		self.output = output
+		
+	def write(self):
+		with open(self.output+'/'+'summary.csv','wb') as f:
+			writer = csv.writer(f)
+			data = [('name','query','time taken')]
+			writer.writerows(data)
+			for commandName in self.commands:
+				writer.writerows(self.commands[commandName].getIterableData())
 
 class InputParser:
 	"""Parsing input file"""
@@ -124,17 +180,18 @@ class InputParser:
 	yamlInput = ""
 	commands = {}
 
-	def __init__(self, arguments):
+	def __init__(self, logger, arguments):
 		self.arguments = arguments
+		self.logger = logger
 
 	def loadYaml(self):
-		f = file(self.arguments.input())
+		f = file(self.arguments.getInput())
 		self.yamlInput = yaml.load(f)
 		f.close
 
 	def printYaml(self):
-		print yaml.dump(self.yamlInput)
-		print self.yamlInput
+		self.logger.debug(yaml.dump(self.yamlInput))
+		self.logger.debug(self.yamlInput)
 		
 	def parseConfig(self):
 		for rootKey in self.yamlInput.keys():
@@ -148,35 +205,51 @@ class InputParser:
 		return self.commands
 		
 	def executeCommands(self):
-		db = DatabaseAdapter()
+		db = DatabaseAdapter(self.logger)
 		for commandName in self.commands.keys():
 			db.connect()
+			start = time.time()
 			db.execute(self.commands[commandName].query)
+			end = time.time()
+			timeTaken = end - start
+			self.commands[commandName].setTimeTaken(timeTaken)
 			db.close()
-			self._writeDataToFile_(commandName, db.getColumns(), db.getData(), self.arguments.output())
+			self._writeDataToFile_(commandName, db.getColumns(), db.getData(), self.arguments.getOutput())
 	
 	def _writeDataToFile_(self, commandName, columns, data, outputFolder):			
-			writer = OutputWriter(commandName, columns, data, outputFolder)
+			writer = OutputWriter(self.logger, commandName, columns, data, outputFolder)
 			
-			if(self.arguments.verbose()):
+			if(self.arguments.isVerbose()):
 				writer.debug()
 			
 			writer.write()
 
 def main():
 	arguments = ArgumentParser()
+	arguments.parse()
 	
-	if(arguments.verbose()):
-		arguments.printMe()
+	if arguments.isValid() :
+		logger = Logger(arguments)
+		
+		if(arguments.isVerbose()):
+			arguments.printMe()
 
-	input = InputParser(arguments)
-	input.loadYaml()
-	
-	if(arguments.verbose()):
-		input.printYaml()
-	
-	input.parseConfig()
-	input.executeCommands()
+		inputParser = InputParser(logger, arguments)
+		inputParser.loadYaml()
+		
+		if(arguments.isVerbose()):
+			inputParser.printYaml()
+		
+		inputParser.parseConfig()
+		inputParser.executeCommands()
+		
+		#for commandName in inputParser.getCommands(): 
+		#	logger.debug(inputParser.getCommands()[commandName])
+		
+		summaryWriter = SummaryWriter(logger, inputParser.getCommands(), arguments.getOutput())
+		summaryWriter.write()
+	else:
+		arguments.printUsage()
 
 if __name__ == "__main__":
 	main()
