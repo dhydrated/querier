@@ -6,4 +6,8 @@ group A:
     query2:
         name: second
         query: SELECT * FROM departments;
+group B:
+    query1:
+        name: third
+        query: SELECT * FROM users;
 

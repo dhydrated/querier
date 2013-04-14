@@ -23,12 +23,15 @@ class ArgumentParser:
 
 		parser.add_option("-v", "--verbose",
                   action="store_true", dest="verbose", default=False,
-                  help="print out messages")
+                  help="Print out messages")
 
 		parser.add_option("-i", "--input", dest="input", default="query.yml",
-                  help="input")
+                  help="Input queries in yml. Default is ./query.yml")
 
-		parser.add_option("-o", "--output", dest="output", default="output", help="output")
+		parser.add_option("-d", "--data", dest="data", default=False,
+                  help="Write data to csv file")
+
+		parser.add_option("-o", "--output", dest="output", default="output", help="Output folder. Default is ./output")
 
 		(self.options, self.args) = parser.parse_args()
 
@@ -43,6 +46,9 @@ class ArgumentParser:
 
 	def getOutput(self):
 		return self.options.output
+	
+	def isOutputToCsv(self):
+		return self.options.data
 
 	def printUsage(self):
 		self.parser.print_help()
@@ -146,9 +152,7 @@ class OutputWriter(BaseWriter):
 		self.logger = logger
 
 	def write(self):
-		
 		self.createDirIfNotExist()
-
 		with open(self.output+'/'+self.name+'.csv', 'wb') as f:
 			writer = csv.writer(f)
 			data = self.columns + self.resultset
@@ -168,12 +172,15 @@ class SummaryWriter(BaseWriter):
 		self.output = output
 		
 	def write(self):
+		self.createDirIfNotExist()
 		with open(self.output+'/'+'summary.csv','wb') as f:
 			writer = csv.writer(f)
 			data = [('group','name','query','time taken')]
 			writer.writerows(data)
 			for commandName in self.commands:
 				writer.writerows(self.commands[commandName].getIterableData())
+				
+			f.close()
 
 class InputParser:
 	"""Parsing input file"""
@@ -185,6 +192,7 @@ class InputParser:
 	def __init__(self, logger, arguments):
 		self.arguments = arguments
 		self.logger = logger
+		self.outputToCsv = arguments.isOutputToCsv()
 
 	def loadYaml(self):
 		f = file(self.arguments.getInput())
@@ -195,12 +203,12 @@ class InputParser:
 		self.logger.debug(yaml.dump(self.yamlInput))
 		self.logger.debug(self.yamlInput)
 		
-	def parseConfig(self):
-		for rootKey in self.yamlInput.keys():
-			queryItem = self.yamlInput[rootKey]
+	def parseConfigToCommands(self):
+		for groupName in self.yamlInput.keys():
+			queryItem = self.yamlInput[groupName]
 			for queryKey in queryItem:
 				queryValues = queryItem[queryKey]
-				queryObject = Command(rootKey, queryValues['name'], queryValues['query'])
+				queryObject = Command(groupName, queryValues['name'], queryValues['query'])
 				self.commands.update({queryObject.name:queryObject})
 				
 	def getCommands(self):
@@ -216,14 +224,13 @@ class InputParser:
 			timeTaken = end - start
 			self.commands[commandName].setTimeTaken(timeTaken)
 			db.close()
-			self._writeDataToFile_(commandName, db.getColumns(), db.getData(), self.arguments.getOutput())
+			if self.arguments.isOutputToCsv():
+				self._writeDataToFile_(commandName, db.getColumns(), db.getData(), self.arguments.getOutput())
 	
 	def _writeDataToFile_(self, commandName, columns, data, outputFolder):			
 			writer = OutputWriter(self.logger, commandName, columns, data, outputFolder)
-			
 			if(self.arguments.isVerbose()):
 				writer.debug()
-			
 			writer.write()
 
 def main():
@@ -242,12 +249,9 @@ def main():
 		if(arguments.isVerbose()):
 			inputParser.printYaml()
 		
-		inputParser.parseConfig()
+		inputParser.parseConfigToCommands()
 		inputParser.executeCommands()
-		
-		#for commandName in inputParser.getCommands(): 
-		#	logger.debug(inputParser.getCommands()[commandName])
-		
+				
 		summaryWriter = SummaryWriter(logger, inputParser.getCommands(), arguments.getOutput())
 		summaryWriter.write()
 	else:
