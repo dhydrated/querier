@@ -108,22 +108,24 @@ class DatabaseAdapter:
 class Command:
 	"""Command values"""
 	
+	group = None
 	name = None
 	query = None
 	timeTaken = None
 	
-	def __init__(self,name,query):
+	def __init__(self,group,name,query):
 		self.name = name
 		self.query = query
+		self.group = group
 		
 	def __str__(self):
-		return self.name + ", " + self.query + ", " + str(self.timeTaken)
+		return self.group + ", " + self.name + ", " + self.query + ", " + str(self.timeTaken)
 	
 	def setTimeTaken(self, timeTaken):
 		self.timeTaken = timeTaken
 		
 	def getIterableData(self):
-		return [(self.name, self.query, self.timeTaken)]
+		return [(self.group, self.name, self.query, self.timeTaken)]
 		
 class BaseWriter:
 	"""Base Writer"""
@@ -168,7 +170,7 @@ class SummaryWriter(BaseWriter):
 	def write(self):
 		with open(self.output+'/'+'summary.csv','wb') as f:
 			writer = csv.writer(f)
-			data = [('name','query','time taken')]
+			data = [('group','name','query','time taken')]
 			writer.writerows(data)
 			for commandName in self.commands:
 				writer.writerows(self.commands[commandName].getIterableData())
@@ -198,7 +200,7 @@ class InputParser:
 			queryItem = self.yamlInput[rootKey]
 			for queryKey in queryItem:
 				queryValues = queryItem[queryKey]
-				queryObject = Command(queryValues['name'], queryValues['query'])
+				queryObject = Command(rootKey, queryValues['name'], queryValues['query'])
 				self.commands.update({queryObject.name:queryObject})
 				
 	def getCommands(self):
