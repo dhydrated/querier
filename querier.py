@@ -47,7 +47,10 @@ class ArgumentParser:
 		parser.add_option("-i", "--input", dest="input", default="query.yml",
                   help="Input queries in yml. Default is ./query.yml")
 
-		parser.add_option("-d", "--data", dest="data", default=False,
+		parser.add_option("-d", "--delimiter", dest="delimiter", default="|",
+                  help="Delimiter for output csv. Default is |")
+
+		parser.add_option("-w", "--write", dest="write", default=False,
                   action="store_true", help="Write data to csv file")
 
 		parser.add_option("-o", "--output", dest="output", default="output", help="Output folder. Default is ./output")
@@ -65,9 +68,12 @@ class ArgumentParser:
 
 	def getOutput(self):
 		return self.options.output
+
+	def getDelimiter(self):
+		return self.options.delimiter
 	
 	def isOutputToCsv(self):
-		return self.options.data
+		return self.options.write
 
 	def printUsage(self):
 		self.parser.print_help()
@@ -202,7 +208,7 @@ class OutputWriter(BaseWriter):
 	def write(self):
 		self.createDirIfNotExist()
 		with open(self.output+'/'+self.name+'.csv', 'wb') as f:
-			writer = csv.writer(f)
+			writer = csv.writer(f, delimiter='|')
 			data = self.columns + self.resultset
 			writer.writerows(data)
 	
@@ -223,7 +229,7 @@ class SummaryWriter(BaseWriter):
 	def write(self):
 		self.createDirIfNotExist()
 		with open(self._getOutputFolder_()+'/'+'summary.csv','wb') as f:
-			writer = csv.writer(f)
+			writer = csv.writer(f, delimiter='|')
 			data = [('group','name','query','time taken')]
 			writer.writerows(data)
 			for command in self.commands:
