@@ -8,18 +8,37 @@ import csv
 import os
 import datetime
 import time
+import logging
+import re
+
+class Singleton(type):
+    def __init__(self, *args, **kwargs):
+        # Call the superclass (type), because we want Singleton isntances to
+        # be intialised *mostly* the same as type isntances
+        super(Singleton, self).__init__(*args, **kwargs)
+        self.__instance = None
+
+    def __call__(self, *args, **kwargs):
+        # If self (the *class* object) has an __instance, return it. Otherwise
+        # super-call __call__ to fall back to the normal class-call machinery
+        # of calling the class' __new__ then __init__
+        if self.__instance is None:
+            self.__instance = super(Singleton, self).__call__(*args, **kwargs)
+        return self.__instance
+
 
 class ArgumentParser:
 	"""Commandline arguments"""
 
+	__metaclass__ = Singleton
 	options = ""
 	args = ""
 
+	def __init__(self):
+		self.parse()
+
 	def parse(self):
 		parser = OptionParser()
-
-		parser.add_option("-f", "--file", dest="filename",
-                  help="write report to FILE", metavar="FILE")
 
 		parser.add_option("-v", "--verbose",
                   action="store_true", dest="verbose", default=False,
@@ -29,7 +48,7 @@ class ArgumentParser:
                   help="Input queries in yml. Default is ./query.yml")
 
 		parser.add_option("-d", "--data", dest="data", default=False,
-                  help="Write data to csv file")
+                  action="store_true", help="Write data to csv file")
 
 		parser.add_option("-o", "--output", dest="output", default="output", help="Output folder. Default is ./output")
 
@@ -57,22 +76,27 @@ class ArgumentParser:
 		print(self.options)
 		print(self.args)
 
-class Logger:
-	"""Script logger"""
+class LoggerFactory:
 
-	def __init__(self, arguments):
-		self.arguments = arguments
-		self.verbose = self.arguments.isVerbose()
+	arguments = None
 
-	def debug(self, msg):
-		if self.verbose :
-			self._print_(msg)
+	@staticmethod
+	def createLogger(name):
+		logging.basicConfig(format='%(asctime)s %(name)s:%(lineno)s %(message)s', level=LoggerFactory._createLevel_(LoggerFactory._isVerbose_()))
+		return logging.getLogger(name)
+		
+	@staticmethod
+	def _createLevel_(verbose):
+		level = logging.WARNING
+		if verbose:
+			level = logging.DEBUG
 
-	def info(self, msg):
-		self._print_(msg)
-			
-	def _print_(self,msg):
-		print str(datetime.datetime.today())+" : "+str(msg)
+		return level
+
+	@staticmethod
+	def _isVerbose_():
+		arguments = ArgumentParser()
+		return arguments.isVerbose()
 
 class DatabaseAdapter:
 	"""Database adapter"""
@@ -81,9 +105,7 @@ class DatabaseAdapter:
 	cursor = ""
 	resultset = ""
 	columns = ""
-	
-	def __init__(self, logger):
-		self.logger = logger
+	logger = None
 
 	def connect(self):
 		self.conn = psycopg2.connect("dbname=testdb user=taufekj password=password")
@@ -132,24 +154,50 @@ class Command:
 		
 	def getIterableData(self):
 		return [(self.group, self.name, self.query, self.timeTaken)]
+
+	def getIdentifier(self):
+		return self._formatFilename_(self.group + ' ' + self.name)
+
+	def _formatFilename_(self, value):
+		import unicodedata
+		value = unicodedata.normalize('NFKD', unicode(value)).encode('ascii', 'ignore')
+		value = unicode(re.sub('[^\w\s-]', '', value).strip().lower())
+		value = unicode(re.sub('[-\s]+', '-', value)) 
+		return value
 		
 class BaseWriter:
 	"""Base Writer"""
+	logger = None
+	arguments = None
 	
 	def createDirIfNotExist(self):
-		if not os.path.exists(self.output):
-			os.makedirs(self.output)
+		if not os.path.exists(self._getOutputFolder_()):
+			os.makedirs(self._getOutputFolder_())
+
+
+	def _getArguments_(self):
+		if self.arguments == None:
+			self.arguments = ArgumentParser()
+		return self.arguments
+
+	def _getOutputFolder_(self):
+		return self._getArguments_().getOutput()
+
+
+	def _getLogger_(self):
+		if self.logger == None:
+			self.logger = LoggerFactory.createLogger(self.__class__.__name__)
+		return self.logger
 	
 
 class OutputWriter(BaseWriter):
 	"""Output writer"""
 
-	def __init__(self, logger, name, columns, resultset, output):
+	def __init__(self, name, columns, resultset, output):
 		self.name = name
 		self.columns = columns
 		self.resultset = resultset
 		self.output = output
-		self.logger = logger
 
 	def write(self):
 		self.createDirIfNotExist()
@@ -159,49 +207,46 @@ class OutputWriter(BaseWriter):
 			writer.writerows(data)
 	
 	def debug(self):
-		self.logger.debug(self.name)
-		self.logger.debug(self.columns)
-		self.logger.debug(self.resultset)
+		self._getLogger_().debug(self.name)
+		self._getLogger_().debug(self.columns)
+		self._getLogger_().debug(self.resultset)
 		
 class SummaryWriter(BaseWriter):
 	"""Summary Writer"""
+
+	logger = None
+	arguments = None
 	
-	def __init__(self, logger, commands, output):
-		self.logger = logger
+	def __init__(self, commands):
 		self.commands = commands
-		self.output = output
 		
 	def write(self):
 		self.createDirIfNotExist()
-		with open(self.output+'/'+'summary.csv','wb') as f:
+		with open(self._getOutputFolder_()+'/'+'summary.csv','wb') as f:
 			writer = csv.writer(f)
 			data = [('group','name','query','time taken')]
 			writer.writerows(data)
-			for commandName in self.commands:
-				writer.writerows(self.commands[commandName].getIterableData())
+			for commandIdentifier in self.commands:
+				writer.writerows(self.commands[commandIdentifier].getIterableData())
 				
 			f.close()
 
 class InputParser:
 	"""Parsing input file"""
 
-	arguments = ""
-	yamlInput = ""
+	arguments = None
+	yamlInput = None
 	commands = {}
-
-	def __init__(self, logger, arguments):
-		self.arguments = arguments
-		self.logger = logger
-		self.outputToCsv = arguments.isOutputToCsv()
+	yamlInput = None
 
 	def loadYaml(self):
-		f = file(self.arguments.getInput())
+		f = file(self._getArguments_().getInput())
 		self.yamlInput = yaml.load(f)
 		f.close
 
 	def printYaml(self):
-		self.logger.debug(yaml.dump(self.yamlInput))
-		self.logger.debug(self.yamlInput)
+		self._getLogger_().debug(yaml.dump(self.yamlInput))
+		self._getLogger_().debug(self.yamlInput)
 		
 	def parseConfigToCommands(self):
 		for groupName in self.yamlInput.keys():
@@ -209,50 +254,64 @@ class InputParser:
 			for queryKey in queryItem:
 				queryValues = queryItem[queryKey]
 				queryObject = Command(groupName, queryValues['name'], queryValues['query'])
-				self.commands.update({queryObject.name:queryObject})
+				self.commands.update({queryObject.getIdentifier():queryObject})
 				
 	def getCommands(self):
 		return self.commands
+
+	def _isOutputToCsv_(self):
+		return self._getArguments_().isOutputToCsv()
 		
 	def executeCommands(self):
-		db = DatabaseAdapter(self.logger)
-		for commandName in self.commands.keys():
+		db = DatabaseAdapter()
+		for commandIdentifier in self.commands.keys():
 			db.connect()
 			start = time.time()
-			db.execute(self.commands[commandName].query)
+			db.execute(self.commands[commandIdentifier].query)
 			end = time.time()
 			timeTaken = end - start
-			self.commands[commandName].setTimeTaken(timeTaken)
+			self.commands[commandIdentifier].setTimeTaken(timeTaken)
 			db.close()
-			if self.arguments.isOutputToCsv():
-				self._writeDataToFile_(commandName, db.getColumns(), db.getData(), self.arguments.getOutput())
+			if self._isOutputToCsv_():
+				self._writeDataToFile_(commandIdentifier, db.getColumns(), db.getData(), self._getOutputFolder_())
 	
-	def _writeDataToFile_(self, commandName, columns, data, outputFolder):			
-			writer = OutputWriter(self.logger, commandName, columns, data, outputFolder)
+	def _writeDataToFile_(self, commandIdentifier, columns, data, outputFolder):			
+			writer = OutputWriter(commandIdentifier, columns, data, outputFolder)
 			if(self.arguments.isVerbose()):
 				writer.debug()
-			writer.write()
+			writer.write()			
+
+	def _getArguments_(self):
+		if self.arguments == None:
+			self.arguments = ArgumentParser()
+		return self.arguments
+
+	def _getOutputFolder_(self):
+		return self._getArguments_().getOutput()
+
+
+	def _getLogger_(self):
+		if self.logger == None:
+			self.logger = LoggerFactory.createLogger(self.__class__.__name__)
+		return self.logger
+
 
 def main():
 	arguments = ArgumentParser()
-	arguments.parse()
 	
 	if arguments.isValid() :
-		logger = Logger(arguments)
 		
 		if(arguments.isVerbose()):
 			arguments.printMe()
 
-		inputParser = InputParser(logger, arguments)
+		inputParser = InputParser()
 		inputParser.loadYaml()
 		
-		if(arguments.isVerbose()):
-			inputParser.printYaml()
 		
 		inputParser.parseConfigToCommands()
 		inputParser.executeCommands()
 				
-		summaryWriter = SummaryWriter(logger, inputParser.getCommands(), arguments.getOutput())
+		summaryWriter = SummaryWriter(inputParser.getCommands())
 		summaryWriter.write()
 	else:
 		arguments.printUsage()

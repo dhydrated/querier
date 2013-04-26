@@ -1,13 +1,13 @@
 # tree format
 group A:
     query1:
-        name: first
+        name: first query
         query: SELECT * FROM users;
     query2:
-        name: second
+        name: second query
         query: SELECT * FROM departments;
 group B:
     query1:
-        name: third
+        name: third q
         query: SELECT * FROM users;
 
