@@ -226,8 +226,8 @@ class SummaryWriter(BaseWriter):
 			writer = csv.writer(f)
 			data = [('group','name','query','time taken')]
 			writer.writerows(data)
-			for commandIdentifier in self.commands:
-				writer.writerows(self.commands[commandIdentifier].getIterableData())
+			for command in self.commands:
+				writer.writerows(command.getIterableData())
 				
 			f.close()
 
@@ -236,7 +236,7 @@ class InputParser:
 
 	arguments = None
 	yamlInput = None
-	commands = {}
+	commands = []
 	yamlInput = None
 
 	def loadYaml(self):
@@ -249,12 +249,13 @@ class InputParser:
 		self._getLogger_().debug(self.yamlInput)
 		
 	def parseConfigToCommands(self):
-		for groupName in self.yamlInput.keys():
-			queryItem = self.yamlInput[groupName]
-			for queryKey in queryItem:
-				queryValues = queryItem[queryKey]
-				queryObject = Command(groupName, queryValues['name'], queryValues['query'])
-				self.commands.update({queryObject.getIdentifier():queryObject})
+		index = 0
+		for groupName in reversed(self.yamlInput.keys()):
+			queries = self.yamlInput[groupName]
+			for queryInfo in queries:
+				queryObject = Command(groupName, queryInfo['name'], queryInfo['query'])
+				self.commands.insert(index,queryObject)
+				index = index + 1
 				
 	def getCommands(self):
 		return self.commands
@@ -264,16 +265,16 @@ class InputParser:
 		
 	def executeCommands(self):
 		db = DatabaseAdapter()
-		for commandIdentifier in self.commands.keys():
+		for command in self.commands:
 			db.connect()
 			start = time.time()
-			db.execute(self.commands[commandIdentifier].query)
+			db.execute(command.query)
 			end = time.time()
 			timeTaken = end - start
-			self.commands[commandIdentifier].setTimeTaken(timeTaken)
+			command.setTimeTaken(timeTaken)
 			db.close()
 			if self._isOutputToCsv_():
-				self._writeDataToFile_(commandIdentifier, db.getColumns(), db.getData(), self._getOutputFolder_())
+				self._writeDataToFile_(command.getIdentifier(), db.getColumns(), db.getData(), self._getOutputFolder_())
 	
 	def _writeDataToFile_(self, commandIdentifier, columns, data, outputFolder):			
 			writer = OutputWriter(commandIdentifier, columns, data, outputFolder)
