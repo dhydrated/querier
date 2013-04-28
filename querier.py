@@ -35,9 +35,9 @@ class ArgumentParser:
 	args = ""
 
 	def __init__(self):
-		self.parse()
+		self._parse_()
 
-	def parse(self):
+	def _parse_(self):
 		parser = OptionParser()
 
 		parser.add_option("-v", "--verbose",
@@ -169,7 +169,7 @@ class Group:
 		data = tuple()
 		data = data + (self.name,)
 		for query in self.queries:
-			data = data + (query.name, query.query, query.timeTaken)
+			data = data + (query.name, query.timeTaken)
 		return [data]
 
 		#return [(self.group.name, self.name, self.query, self.timeTaken)]
@@ -362,7 +362,7 @@ class QueryParser(YamlParser):
 	def _isOutputToCsv_(self):
 		return self._getArguments_().isOutputToCsv()
 		
-	def executeCommands(self):
+	def execute(self):
 		db = DatabaseAdapter(self.database)
 
 		for group in self.groups:
@@ -379,8 +379,6 @@ class QueryParser(YamlParser):
 	
 	def _writeDataToFile_(self, commandIdentifier, columns, data, outputFolder):			
 			writer = OutputWriter(commandIdentifier, columns, data, outputFolder)
-			if(self.arguments.isVerbose()):
-				writer.debug()
 			writer.write()	
 
 	def _getOutputFolder_(self):
@@ -401,7 +399,7 @@ def main():
 		configParser = ConfigParser()
 
 		queryParser = QueryParser(configParser.getDatabase())
-		queryParser.executeCommands()
+		queryParser.execute()
 				
 		summaryWriter = SummaryWriter(queryParser.getGroups())
 		summaryWriter.write()
