@@ -179,16 +179,16 @@ class Query:
 	"""Query values"""
 	
 	name = None
-	query = None
+	queries = []
 	timeTaken = None
 	
-	def __init__(self,group,name,query):
+	def __init__(self,group,name,queries):
 		self.name = name
-		self.query = query
+		self.queries = queries
 		self.group = group
 		
 	def __str__(self):
-		return self.group.name + ", " + self.name + ", " + self.query + ", " + str(self.timeTaken)
+		return self.group.name + ", " + self.name + ", " + str(self.timeTaken)
 	
 	def setTimeTaken(self, timeTaken):
 		self.timeTaken = timeTaken
@@ -351,7 +351,7 @@ class QueryParser(YamlParser):
 			group = Group(groupName)
 			queries = self.yamlFile[groupName]
 			for queryInfo in queries:
-				queryObject = Query(group, queryInfo['name'], queryInfo['query'])
+				queryObject = Query(group, queryInfo['name'], queryInfo['queries'])
 				group.addQuery(queryObject)
 			self.groups.append(group)
 			group = None
@@ -369,9 +369,16 @@ class QueryParser(YamlParser):
 			for query in group.queries:
 				db.connect()
 				start = time.time()
-				db.execute(query.query)
+				for sql in query.queries:
+					print group.name
+					print query.name
+					print sql
+
+					db.execute(sql)
+
 				end = time.time()
 				timeTaken = end - start
+				print timeTaken
 				query.setTimeTaken(timeTaken)
 				db.close()
 				if self._isOutputToCsv_():

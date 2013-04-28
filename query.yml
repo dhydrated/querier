@@ -1,34 +1,34 @@
 # tree format
 option 1:
     - name: first query A
-      query: >
-        SELECT * FROM users; 
-        SELECT * FROM users; 
-        SELECT * FROM users;
+      queries:
+        - SELECT * FROM users;
+        - SELECT * FROM departments;
+        - SELECT * FROM users;
     - name: second query A
-      query: >
-        SELECT * FROM users; 
-        SELECT * FROM users; 
-        SELECT * FROM users;
+      queries:
+        - SELECT * FROM users;
+        - SELECT * FROM departments;
+        - SELECT * FROM users;
     - name: second query test A
-      query: >
-        SELECT * FROM users; 
-        SELECT * FROM users; 
-        SELECT * FROM users;
+      queries:
+        - SELECT * FROM users;
+        - SELECT * FROM departments;
+        - SELECT * FROM users;
 option 2:
     - name: first query B
-      query: >
-        SELECT * FROM users; 
-        SELECT * FROM users; 
-        SELECT * FROM users;
+      queries:
+        - SELECT * FROM users;
+        - SELECT * FROM users;
+        - SELECT * FROM departments;
     - name: second query B
-      query: >
-        SELECT * FROM users; 
-        SELECT * FROM users; 
-        SELECT * FROM users;
+      queries:
+        - SELECT * FROM users;
+        - SELECT * FROM users;
+        - SELECT * FROM departments;
     - name: second query test B
-      query: >
-        SELECT * FROM users; 
-        SELECT * FROM users; 
-        SELECT * FROM users;
+      queries:
+        - SELECT * FROM users;
+        - SELECT * FROM users;
+        - SELECT * FROM departments;
 
