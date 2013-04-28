@@ -164,6 +164,15 @@ class Group:
 
 	def getQueries(self):
 		return self.queries
+		
+	def getIterableData(self):
+		data = tuple()
+		data = data + (self.name,)
+		for query in self.queries:
+			data = data + (query.name, query.query, query.timeTaken)
+		return [data]
+
+		#return [(self.group.name, self.name, self.query, self.timeTaken)]
 
 
 class Query:
@@ -183,9 +192,6 @@ class Query:
 	
 	def setTimeTaken(self, timeTaken):
 		self.timeTaken = timeTaken
-		
-	def getIterableData(self):
-		return [(self.group.name, self.name, self.query, self.timeTaken)]
 
 	def getIdentifier(self):
 		return self._formatFilename_(self.group.name + ' ' + self.name)
@@ -251,7 +257,7 @@ class OutputWriter(BaseWriter):
 	def write(self):
 		self.createDirIfNotExist()
 		with open(self.output+'/'+self.name+'.csv', 'wb') as f:
-			writer = csv.writer(f, delimiter='|')
+			writer = csv.writer(f, delimiter=self._getArguments_().getDelimiter())
 			data = self.columns + self.resultset
 			writer.writerows(data)
 	
@@ -273,12 +279,13 @@ class SummaryWriter(BaseWriter):
 	def write(self):
 		self.createDirIfNotExist()
 		with open(self._getOutputFolder_()+'/'+'summary.csv','wb') as f:
-			writer = csv.writer(f, delimiter='|')
-			data = [('group','name','query','time taken')]
-			writer.writerows(data)
+			writer = csv.writer(f, delimiter=self._getArguments_().getDelimiter())
+			# data = [('group','name','query','time taken')]
+			# writer.writerows(data)
 			for group in self.groups:
-				for query in group.getQueries():
-					writer.writerows(query.getIterableData())
+				writer.writerows(group.getIterableData())
+				# for query in group.getQueries():
+				# 	writer.writerows(query.getIterableData())
 				
 			f.close()
 
