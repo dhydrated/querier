@@ -1,32 +1,40 @@
 # tree format
 option 1:
     - name: first query A
+      ignore_first: true
       queries:
+        - SELECT * FROM users;
         - SELECT * FROM users;
         - SELECT * FROM departments;
         - SELECT * FROM users;
     - name: second query A
+      ignore_first: false
       queries:
         - SELECT * FROM users;
         - SELECT * FROM departments;
         - SELECT * FROM users;
     - name: second query test A
+      ignore_first: false
       queries:
         - SELECT * FROM users;
         - SELECT * FROM departments;
         - SELECT * FROM users;
 option 2:
     - name: first query B
+      ignore_first: true
       queries:
+        - SELECT * FROM users;
         - SELECT * FROM users;
         - SELECT * FROM users;
         - SELECT * FROM departments;
     - name: second query B
+      ignore_first: false
       queries:
         - SELECT * FROM users;
         - SELECT * FROM users;
         - SELECT * FROM departments;
     - name: second query test B
+      ignore_first: false
       queries:
         - SELECT * FROM users;
         - SELECT * FROM users;
