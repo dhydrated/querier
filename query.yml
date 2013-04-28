@@ -3,14 +3,14 @@ group A:
     - name: first query
       query: SELECT * FROM users;
     - name: second query
-      query: SELECT * FROM departments;
+      query: SELECT * FROM users;
     - name: second query test
-      query: SELECT * FROM departments;
+      query: SELECT * FROM users;
 group B:
     - name: first query
       query: SELECT * FROM users;
     - name: second query
-      query: SELECT * FROM departments;
+      query: SELECT * FROM users;
     - name: second query test
-      query: SELECT * FROM departments;
+      query: SELECT * FROM users;
 

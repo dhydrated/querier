@@ -47,6 +47,9 @@ class ArgumentParser:
 		parser.add_option("-i", "--input", dest="input", default="query.yml",
                   help="Input queries in yml. Default is ./query.yml")
 
+		parser.add_option("-c", "--config", dest="config", default="config.yml",
+                  help="Configuration in yml. Default is ./config.yml")
+
 		parser.add_option("-d", "--delimiter", dest="delimiter", default="|",
                   help="Delimiter for output csv. Default is |")
 
@@ -62,6 +65,9 @@ class ArgumentParser:
 
 	def getInput(self):
 		return self.options.input
+
+	def getConfig(self):
+		return self.options.config
 
 	def isVerbose(self):
 		return self.options.verbose
@@ -112,9 +118,14 @@ class DatabaseAdapter:
 	resultset = ""
 	columns = ""
 	logger = None
+	database = None
+
+	def __init__(self, database):
+		self.database = database
+		print "dbname=%s port=%s user=%s password=%s" % (self.database.host, self.database.port, self.database.username, self.database.password)
 
 	def connect(self):
-		self.conn = psycopg2.connect("dbname=testdb user=taufekj password=password")
+		self.conn = psycopg2.connect("host=%s port=%s dbname=%s user=%s password=%s" % (self.database.host, self.database.port, self.database.dbname, self.database.username, self.database.password))
 
 	def execute(self, query):
 		self._execute_(query)
@@ -138,6 +149,7 @@ class DatabaseAdapter:
 
 	def getColumns(self):
 		return self.columns
+
 
 class Command:
 	"""Command values"""
@@ -170,6 +182,23 @@ class Command:
 		value = unicode(re.sub('[^\w\s-]', '', value).strip().lower())
 		value = unicode(re.sub('[-\s]+', '-', value)) 
 		return value
+
+
+class Database:
+
+	host = None
+	port = None
+	dbname = None
+	username = None
+	password = None
+
+	def __init__(self, host, port, dbname, username, password):
+		self.host = host
+		self.port = port
+		self.dbname = dbname
+		self.username = username
+		self.password = password
+
 		
 class BaseWriter:
 	"""Base Writer"""
@@ -237,27 +266,67 @@ class SummaryWriter(BaseWriter):
 				
 			f.close()
 
-class InputParser:
-	"""Parsing input file"""
+class YamlParser:
 
+	yamlFile = None
 	arguments = None
-	yamlInput = None
-	commands = []
-	yamlInput = None
+	logger = None
 
-	def loadYaml(self):
-		f = file(self._getArguments_().getInput())
-		self.yamlInput = yaml.load(f)
+	def _loadYaml_(self):
+		f = file(self._getFilePath_())
+		self.yamlFile = yaml.load(f)
 		f.close
 
 	def printYaml(self):
-		self._getLogger_().debug(yaml.dump(self.yamlInput))
-		self._getLogger_().debug(self.yamlInput)
+		self._getLogger_().debug(yaml.dump(self.yamlFile))
+		self._getLogger_().debug(self.yamlFile)		
+
+	def _getArguments_(self):
+		if self.arguments == None:
+			self.arguments = ArgumentParser()
+		return self.arguments
+
+	def _getLogger_(self):
+		if self.logger == None:
+			self.logger = LoggerFactory.createLogger(self.__class__.__name__)
+		return self.logger
+
+	def _getFilePath_(self):
+		pass
+
+
+class ConfigParser(YamlParser):
+
+	def __init__(self):
+		self._loadYaml_()
+		self._parse_()
+
+	def _parse_(self):
+		database = self.yamlFile['database']
+		self.database = Database(host = database['host'], port = database['port'], dbname = database['dbname'], username = database['username'], password = database['password'])
+			
+	def _getFilePath_(self):
+		return self._getArguments_().getConfig()
+
+	def getDatabase(self):
+		return self.database
+
+
+class QueryParser(YamlParser):
+	"""Parsing input file"""
+
+	commands = []
+	database = None
+
+	def __init__(self, database):
+		self.database = database
+		self._loadYaml_()
+		self._parse_()
 		
-	def parseConfigToCommands(self):
+	def _parse_(self):
 		index = 0
-		for groupName in reversed(self.yamlInput.keys()):
-			queries = self.yamlInput[groupName]
+		for groupName in reversed(self.yamlFile.keys()):
+			queries = self.yamlFile[groupName]
 			for queryInfo in queries:
 				queryObject = Command(groupName, queryInfo['name'], queryInfo['query'])
 				self.commands.insert(index,queryObject)
@@ -270,7 +339,7 @@ class InputParser:
 		return self._getArguments_().isOutputToCsv()
 		
 	def executeCommands(self):
-		db = DatabaseAdapter()
+		db = DatabaseAdapter(self.database)
 		for command in self.commands:
 			db.connect()
 			start = time.time()
@@ -286,21 +355,13 @@ class InputParser:
 			writer = OutputWriter(commandIdentifier, columns, data, outputFolder)
 			if(self.arguments.isVerbose()):
 				writer.debug()
-			writer.write()			
-
-	def _getArguments_(self):
-		if self.arguments == None:
-			self.arguments = ArgumentParser()
-		return self.arguments
+			writer.write()	
 
 	def _getOutputFolder_(self):
 		return self._getArguments_().getOutput()
 
-
-	def _getLogger_(self):
-		if self.logger == None:
-			self.logger = LoggerFactory.createLogger(self.__class__.__name__)
-		return self.logger
+	def _getFilePath_(self):
+		return self._getArguments_().getInput()
 
 
 def main():
@@ -311,14 +372,12 @@ def main():
 		if(arguments.isVerbose()):
 			arguments.printMe()
 
-		inputParser = InputParser()
-		inputParser.loadYaml()
-		
-		
-		inputParser.parseConfigToCommands()
-		inputParser.executeCommands()
+		configParser = ConfigParser()
+
+		queryParser = QueryParser(configParser.getDatabase())
+		queryParser.executeCommands()
 				
-		summaryWriter = SummaryWriter(inputParser.getCommands())
+		summaryWriter = SummaryWriter(queryParser.getCommands())
 		summaryWriter.write()
 	else:
 		arguments.printUsage()

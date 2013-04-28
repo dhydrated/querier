@@ -1,0 +1,7 @@
+# tree format
+database:
+      host: localhost
+      port: 5432
+      dbname: testdb
+      username: taufek
+      password: password
