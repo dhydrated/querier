@@ -122,8 +122,7 @@ class DatabaseAdapter:
 
 	def __init__(self, database):
 		self.database = database
-		print "dbname=%s port=%s user=%s password=%s" % (self.database.host, self.database.port, self.database.username, self.database.password)
-
+		
 	def connect(self):
 		self.conn = psycopg2.connect("host=%s port=%s dbname=%s user=%s password=%s" % (self.database.host, self.database.port, self.database.dbname, self.database.username, self.database.password))
 
@@ -151,10 +150,25 @@ class DatabaseAdapter:
 		return self.columns
 
 
-class Command:
-	"""Command values"""
+class Group:
+
+	queries = []
+	name = None
+
+	def __init__(self, name):
+		self.queries = []
+		self.name = name
+
+	def addQuery(self, query):
+		self.queries.append(query)
+
+	def getQueries(self):
+		return self.queries
+
+
+class Query:
+	"""Query values"""
 	
-	group = None
 	name = None
 	query = None
 	timeTaken = None
@@ -165,16 +179,16 @@ class Command:
 		self.group = group
 		
 	def __str__(self):
-		return self.group + ", " + self.name + ", " + self.query + ", " + str(self.timeTaken)
+		return self.group.name + ", " + self.name + ", " + self.query + ", " + str(self.timeTaken)
 	
 	def setTimeTaken(self, timeTaken):
 		self.timeTaken = timeTaken
 		
 	def getIterableData(self):
-		return [(self.group, self.name, self.query, self.timeTaken)]
+		return [(self.group.name, self.name, self.query, self.timeTaken)]
 
 	def getIdentifier(self):
-		return self._formatFilename_(self.group + ' ' + self.name)
+		return self._formatFilename_(self.group.name + ' ' + self.name)
 
 	def _formatFilename_(self, value):
 		import unicodedata
@@ -251,9 +265,10 @@ class SummaryWriter(BaseWriter):
 
 	logger = None
 	arguments = None
+	groups = None
 	
-	def __init__(self, commands):
-		self.commands = commands
+	def __init__(self, groups):
+		self.groups = groups
 		
 	def write(self):
 		self.createDirIfNotExist()
@@ -261,8 +276,9 @@ class SummaryWriter(BaseWriter):
 			writer = csv.writer(f, delimiter='|')
 			data = [('group','name','query','time taken')]
 			writer.writerows(data)
-			for command in self.commands:
-				writer.writerows(command.getIterableData())
+			for group in self.groups:
+				for query in group.getQueries():
+					writer.writerows(query.getIterableData())
 				
 			f.close()
 
@@ -315,7 +331,7 @@ class ConfigParser(YamlParser):
 class QueryParser(YamlParser):
 	"""Parsing input file"""
 
-	commands = []
+	groups = []
 	database = None
 
 	def __init__(self, database):
@@ -324,32 +340,35 @@ class QueryParser(YamlParser):
 		self._parse_()
 		
 	def _parse_(self):
-		index = 0
 		for groupName in reversed(self.yamlFile.keys()):
+			group = Group(groupName)
 			queries = self.yamlFile[groupName]
 			for queryInfo in queries:
-				queryObject = Command(groupName, queryInfo['name'], queryInfo['query'])
-				self.commands.insert(index,queryObject)
-				index = index + 1
+				queryObject = Query(group, queryInfo['name'], queryInfo['query'])
+				group.addQuery(queryObject)
+			self.groups.append(group)
+			group = None
 				
-	def getCommands(self):
-		return self.commands
+	def getGroups(self):
+		return self.groups
 
 	def _isOutputToCsv_(self):
 		return self._getArguments_().isOutputToCsv()
 		
 	def executeCommands(self):
 		db = DatabaseAdapter(self.database)
-		for command in self.commands:
-			db.connect()
-			start = time.time()
-			db.execute(command.query)
-			end = time.time()
-			timeTaken = end - start
-			command.setTimeTaken(timeTaken)
-			db.close()
-			if self._isOutputToCsv_():
-				self._writeDataToFile_(command.getIdentifier(), db.getColumns(), db.getData(), self._getOutputFolder_())
+
+		for group in self.groups:
+			for query in group.queries:
+				db.connect()
+				start = time.time()
+				db.execute(query.query)
+				end = time.time()
+				timeTaken = end - start
+				query.setTimeTaken(timeTaken)
+				db.close()
+				if self._isOutputToCsv_():
+					self._writeDataToFile_(query.getIdentifier(), db.getColumns(), db.getData(), self._getOutputFolder_())
 	
 	def _writeDataToFile_(self, commandIdentifier, columns, data, outputFolder):			
 			writer = OutputWriter(commandIdentifier, columns, data, outputFolder)
@@ -377,7 +396,7 @@ def main():
 		queryParser = QueryParser(configParser.getDatabase())
 		queryParser.executeCommands()
 				
-		summaryWriter = SummaryWriter(queryParser.getCommands())
+		summaryWriter = SummaryWriter(queryParser.getGroups())
 		summaryWriter.write()
 	else:
 		arguments.printUsage()
